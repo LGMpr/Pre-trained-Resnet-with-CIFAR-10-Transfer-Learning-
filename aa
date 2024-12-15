@@ -1,0 +1,90 @@
+model = torchvision.models.resnet18(pretrained=True)
+
+num_ftrs = model.fc.in_features # fc의 입력 노드 수를 산출 (512개)
+model.fc = nn.Linear(num_ftrs, 10) # fc를 nn.Linear(num_ftrs, 10)로 대체
+model = model.to(device)
+
+epochs = 10
+lr = 0.0001
+criterion = nn.CrossEntropyLoss()
+optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=1e-2)
+
+train_total = 0
+train_correct = 0
+loss_hist = [0] * (epochs * len(trainloader))
+accuracy_hist = [0] * (epochs * len(trainloader))
+
+wandb.init(
+    # set the wandb project where this run will be logged
+    project="resnet with cifar10",
+
+    group='test',
+    name='Base5',
+    notes='basic',
+    tags='a',
+    # track hyperparameters and run metadata
+    config={
+    "learning_rate": 0,
+    "transform(data augmentation)": 0,
+    "": "A",
+    "per__num": "",
+    }
+)
+
+
+for epoch in range(epochs):
+    model.train()
+    running_loss = 0.0
+    for data in trainloader:
+
+        inputs, labels = data[0].to(device), data[1].to(device)
+
+        optimizer.zero_grad()
+        outputs = model(inputs)
+        loss = criterion(outputs, labels)
+        loss.backward()
+        optimizer.step()
+        running_loss += loss.item()
+
+        loss_hist = loss_hist + [loss.item()]
+        _, predicted = torch.max(outputs.data, 1)
+        train_total += labels.size(0)
+        train_correct += (predicted == labels).sum().item()
+        print(f"train accuracy: {100 * train_correct / train_total:.4f}%, Loss:{loss:.5f}")
+        wandb.log({"train_acc": train_correct / train_total, "train_loss": loss.item()})
+
+
+# wandb.log({
+#         "val_acc": 100. * correct / len(loader.dataset),
+#         "val_loss": val_loss})
+
+    cost = running_loss / len(trainloader)
+    print('[%d] loss: %.3f' %(epoch + 1, cost))
+
+# torch.save(model.state_dict(), './models/cifar10_resnet18.pth')      
+
+print('Finished Training')
+
+
+
+
+
+test_correct = 0
+test_total = 0
+test_loss = 0
+
+with torch.no_grad():
+    model.eval()
+    for data in testloader:
+        images, labels = data[0].to(device), data[1].to(device)
+        outputs = model(images)
+        _, predicted = torch.max(outputs.data, 1)
+        test_loss = criterion(outputs, labels)
+        test_total += labels.size(0)
+        test_correct += (predicted == labels).sum().item()
+
+
+
+wandb.log({"test_acc": test_correct / test_total, "test_loss": test_loss})
+print('Accuracy of the network on the 10000 test images: %d %%' % (100 * test_correct / test_total))
+wandb.finish()
